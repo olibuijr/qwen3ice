@@ -19,11 +19,16 @@ models/
 qwen-icelandic-*/
 small-icelandic-*/
 
-# Data
+# Data - NEVER commit large dataset files
 data/icelandic/icelandic_training_data/
+data/icelandic/*.jsonl
+data/icelandic/*.json
+data/**/*.jsonl
+data/**/*.json
 *.jsonl
-!data/icelandic/train.jsonl
-!data/icelandic/validation.jsonl
+*.json
+!config*.json
+!package.json
 
 # Logs
 *.log

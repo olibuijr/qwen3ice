@@ -1,0 +1,150 @@
+# Qwen 2.5 3B Icelandic Training Configuration
+# OPTIMIZED FOR RTX 5090 32GB on RunPod
+
+model:
+  name: "Qwen/Qwen2.5-3B-Instruct"
+  max_seq_length: 4096  # Increased from 1024 - 5090 can handle much longer sequences
+  load_in_4bit: false   # No need for 4-bit with 32GB VRAM
+  dtype: "bfloat16"     # RTX 5090 has excellent BF16 support
+
+lora:
+  r: 128  # Much higher rank for better quality (was 16)
+  alpha: 256  # Doubled alpha
+  dropout: 0.1  # Add slight dropout for regularization
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+  bias: "none"
+  use_rslora: true  # Enable rank-stabilized LoRA
+  use_gradient_checkpointing: false  # Not needed with 32GB
+
+training:
+  output_dir: "./models/qwen-icelandic-5090"
+  num_train_epochs: 5  # More epochs for better convergence
+  
+  # Batch size settings for 32GB VRAM
+  per_device_train_batch_size: 8  # Much larger batch size
+  per_device_eval_batch_size: 16
+  gradient_accumulation_steps: 4  # Effective batch size = 32
+  
+  # Learning rate schedule
+  learning_rate: 2.0e-4  # Can use higher LR with larger batch
+  lr_scheduler_type: "cosine_with_restarts"
+  warmup_ratio: 0.05
+  weight_decay: 0.01
+  
+  # Optimizer - use full precision
+  optim: "adamw_torch"  # Full precision AdamW
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 1.0e-8
+  
+  # Mixed precision
+  fp16: false
+  bf16: true  # Use BF16 on 5090
+  tf32: true  # Enable TF32 for speedup
+  
+  # Memory optimizations (less aggressive)
+  gradient_checkpointing: false
+  max_grad_norm: 1.0
+  
+  # Logging and checkpointing
+  logging_steps: 10
+  save_strategy: "steps"
+  save_steps: 500
+  evaluation_strategy: "steps"
+  eval_steps: 250
+  save_total_limit: 5  # Keep more checkpoints
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+  early_stopping_patience: 5
+  
+  # Advanced settings
+  seed: 42
+  report_to: "wandb"  # Enable W&B logging on RunPod
+  push_to_hub: false
+  hub_model_id: "olibuijr/qwen-icelandic"
+  
+  # Performance optimizations
+  dataloader_num_workers: 8  # More workers for faster loading
+  dataloader_pin_memory: true
+  dataloader_persistent_workers: true
+  remove_unused_columns: false
+  
+  # DeepSpeed config (optional but recommended for 5090)
+  deepspeed: null  # Can add DeepSpeed config if needed
+
+dataset:
+  train_path: "./data/icelandic/train.jsonl"
+  validation_path: "./data/icelandic/validation.jsonl"
+  max_examples: -1  # Use all data
+  
+  # Sampling ratios for different sources
+  igc_ratio: 0.35
+  wikipedia_ratio: 0.25
+  oscar_ratio: 0.15
+  greynir_ratio: 0.15
+  ic3_ratio: 0.10
+  
+  # Data processing
+  preprocessing_num_workers: 8
+  max_length: 4096
+  truncation: true
+  padding: "max_length"
+
+inference:
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 50
+  max_new_tokens: 1024
+  repetition_penalty: 1.1
+  do_sample: true
+  num_beams: 1  # Can increase for better quality
+
+# Performance estimates for RTX 5090 (32GB)
+performance_estimates:
+  model_memory: "~6GB"  # Full precision model
+  activations: "~8-10GB"  # For seq_len=4096, batch=8
+  optimizer: "~6GB"  # Full precision AdamW
+  gradients: "~6GB"  # Full gradients
+  overhead: "~3-4GB"  # CUDA kernels, etc.
+  total: "~29-32GB"  # Near full utilization
+  
+  # Speed estimates
+  tokens_per_second: "~15000-20000"  # With optimizations
+  time_per_epoch: "~2-3 hours"  # For 1.6M examples
+  total_training_time: "~10-15 hours"  # 5 epochs
+
+# RunPod specific settings
+runpod:
+  container: "runpod/pytorch:2.1.0-py3.10-cuda12.1-devel"
+  mount_points:
+    - "/workspace"
+    - "/datasets"
+  environment:
+    TRANSFORMERS_CACHE: "/workspace/cache"
+    HF_HOME: "/workspace/huggingface"
+    CUDA_LAUNCH_BLOCKING: "0"
+    PYTORCH_CUDA_ALLOC_CONF: "max_split_size_mb:512"
+    TOKENIZERS_PARALLELISM: "false"
+    
+  # RunPod optimizations
+  gpu_optimization:
+    enable_flash_attention: true
+    enable_triton: true
+    enable_apex: false  # Not needed with native AMP
+    compile_model: true  # torch.compile for 5090
+    
+# Monitoring
+monitoring:
+  wandb_project: "qwen-icelandic-5090"
+  wandb_entity: "your-entity"
+  log_gpu_memory: true
+  log_learning_rate: true
+  log_throughput: true
