@@ -170,43 +170,68 @@ class DatasetManager:
         all_examples = []
         stats = {}
         
+        examples_by_source = {}
+        filtered_stats = {}
+        
         with console.status("[bold green]Preparing datasets...") as status:
             
             # Wikipedia
             if "wikipedia" in sources:
                 status.update("Loading Wikipedia...")
                 wiki_examples = self._load_wikipedia()
-                all_examples.extend(wiki_examples)
-                stats['Wikipedia'] = len(wiki_examples)
+                original_count = len(wiki_examples)
+                # Filter low-quality examples
+                wiki_examples = [ex for ex in wiki_examples 
+                               if self._filter_quality(ex["messages"][-1]["content"])]
+                examples_by_source['Wikipedia'] = wiki_examples
+                stats['Wikipedia'] = original_count
+                filtered_stats['Wikipedia'] = len(wiki_examples)
             
             # IC3
             if "ic3" in sources:
                 status.update("Loading IC3...")
                 ic3_examples = self._load_ic3()
-                all_examples.extend(ic3_examples)
-                stats['IC3'] = len(ic3_examples)
+                original_count = len(ic3_examples)
+                # Filter low-quality examples
+                ic3_examples = [ex for ex in ic3_examples 
+                              if self._filter_quality(ex["messages"][-1]["content"])]
+                examples_by_source['IC3'] = ic3_examples
+                stats['IC3'] = original_count
+                filtered_stats['IC3'] = len(ic3_examples)
             
             # Wiki QA
             if "wikiqa" in sources:
                 status.update("Loading Wiki QA...")
                 qa_examples = self._load_wiki_qa()
-                all_examples.extend(qa_examples)
+                examples_by_source['Wiki QA'] = qa_examples
                 stats['Wiki QA'] = len(qa_examples)
+                filtered_stats['Wiki QA'] = len(qa_examples)  # No filtering for Q&A
         
         # Print statistics
         table = Table(title="Dataset Statistics", box=box.ROUNDED)
         table.add_column("Source", style="cyan")
-        table.add_column("Examples", style="green")
+        table.add_column("Original", style="yellow")
+        table.add_column("After Filtering", style="green")
+        table.add_column("Kept %", style="blue")
         
-        for source, count in stats.items():
-            table.add_row(source, f"{count:,}")
+        for source in stats:
+            orig = stats[source]
+            filtered = filtered_stats[source]
+            pct = (filtered / orig * 100) if orig > 0 else 0
+            table.add_row(source, f"{orig:,}", f"{filtered:,}", f"{pct:.1f}%")
         
-        table.add_row("[bold]Total", f"[bold]{len(all_examples):,}")
+        # Balance datasets
+        all_examples = self._balance_datasets(examples_by_source)
+        
+        table.add_row("[bold]Total", 
+                     f"[bold]{sum(stats.values()):,}", 
+                     f"[bold]{len(all_examples):,}",
+                     f"[bold]{len(all_examples)/sum(stats.values())*100:.1f}%")
         console.print(table)
         
         # Save datasets
         if all_examples:
-            console.print(f"\n[green]Saving {len(all_examples):,} examples...")
+            console.print(f"\n[green]Saving {len(all_examples):,} balanced examples...")
             return self._save_datasets(all_examples)
         else:
             console.print("[red]No examples collected!")
@@ -290,6 +315,44 @@ class DatasetManager:
             ]
         }
     
+    def _filter_quality(self, text: str) -> bool:
+        """Filter low-quality text examples"""
+        # Check minimum length
+        if len(text) < 100:
+            return False
+        
+        # Check for excessive punctuation/noise
+        if text.count('!') > 10 or text.count('?') > 10:
+            return False
+        
+        # Check for Icelandic characters
+        icelandic_chars = 'áéíóúýþæðÁÉÍÓÚÝÞÆÐ'
+        has_icelandic = any(c in text for c in icelandic_chars)
+        if not has_icelandic and len(text) > 50:
+            return False  # Likely not Icelandic
+        
+        # Check for excessive repetition
+        words = text.lower().split()
+        if len(words) > 10:
+            unique_ratio = len(set(words)) / len(words)
+            if unique_ratio < 0.3:  # Too repetitive
+                return False
+        
+        return True
+    
+    def _balance_datasets(self, examples_dict: Dict[str, List]) -> List[Dict]:
+        """Balance examples from different sources"""
+        MAX_PER_SOURCE = 500000  # Cap each source
+        
+        balanced = []
+        for source, examples in examples_dict.items():
+            if len(examples) > MAX_PER_SOURCE:
+                console.print(f"[yellow]Capping {source} from {len(examples)} to {MAX_PER_SOURCE} examples")
+                examples = random.sample(examples, MAX_PER_SOURCE)
+            balanced.extend(examples)
+        
+        return balanced
+    
     def _save_datasets(self, examples: List[Dict]) -> Tuple[int, int]:
         """Save processed datasets"""
         random.seed(self.config.seed)
@@ -312,12 +375,17 @@ class DatasetManager:
             for ex in val_data:
                 f.write(json.dumps(ex, ensure_ascii=False) + '\n')
         
-        # Save as HuggingFace dataset
-        dataset_dict = DatasetDict({
-            'train': Dataset.from_list(train_data),
-            'test': Dataset.from_list(val_data)
-        })
-        dataset_dict.save_to_disk(str(self.output_dir / "hf_dataset"))
+        # Save as HuggingFace dataset if available
+        if ML_AVAILABLE:
+            try:
+                from datasets import Dataset as RealDataset, DatasetDict as RealDatasetDict
+                dataset_dict = RealDatasetDict({
+                    'train': RealDataset.from_list(train_data),
+                    'test': RealDataset.from_list(val_data)
+                })
+                dataset_dict.save_to_disk(str(self.output_dir / "hf_dataset"))
+            except Exception as e:
+                console.print(f"[yellow]Could not save HF dataset format: {e}")
         
         return len(train_data), len(val_data)
     
@@ -413,6 +481,8 @@ class ModelTrainer:
                 per_device_eval_batch_size=self.config.per_device_eval_batch_size,
                 gradient_accumulation_steps=self.config.gradient_accumulation_steps,
                 learning_rate=self.config.learning_rate,
+                lr_scheduler_type=getattr(self.config, 'lr_scheduler_type', 'cosine'),
+                warmup_ratio=getattr(self.config, 'warmup_ratio', 0.1),
                 fp16=self.config.fp16,
                 save_steps=self.config.save_steps,
                 logging_steps=self.config.logging_steps,
@@ -420,9 +490,12 @@ class ModelTrainer:
                 eval_steps=self.config.eval_steps,
                 save_total_limit=self.config.save_total_limit,
                 load_best_model_at_end=True,
+                metric_for_best_model="eval_loss",
+                greater_is_better=False,
                 optim=self.config.optim,
                 seed=self.config.seed,
                 max_seq_length=self.config.max_seq_length,
+                max_grad_norm=getattr(self.config, 'max_grad_norm', 0.5),
             )
         else:
             training_args = TrainingArguments(
@@ -432,6 +505,8 @@ class ModelTrainer:
                 per_device_eval_batch_size=self.config.per_device_eval_batch_size,
                 gradient_accumulation_steps=self.config.gradient_accumulation_steps,
                 learning_rate=self.config.learning_rate,
+                lr_scheduler_type=getattr(self.config, 'lr_scheduler_type', 'cosine'),
+                warmup_ratio=getattr(self.config, 'warmup_ratio', 0.1),
                 fp16=self.config.fp16,
                 save_steps=self.config.save_steps,
                 logging_steps=self.config.logging_steps,
@@ -439,9 +514,12 @@ class ModelTrainer:
                 eval_steps=self.config.eval_steps,
                 save_total_limit=self.config.save_total_limit,
                 load_best_model_at_end=True,
+                metric_for_best_model="eval_loss",
+                greater_is_better=False,
                 optim=self.config.optim,
                 seed=self.config.seed,
                 gradient_checkpointing=self.config.gradient_checkpointing,
+                max_grad_norm=getattr(self.config, 'max_grad_norm', 0.5),
             )
         
         # Create trainer

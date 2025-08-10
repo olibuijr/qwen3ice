@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Qwen3-4B Icelandic Fine-tuning Script
+Qwen 2.5 3B Icelandic Fine-tuning Script
 Optimized for RTX 3080 (10GB VRAM) using QLoRA and Unsloth
 """
 
@@ -20,11 +20,11 @@ warnings.filterwarnings("ignore")
 
 
 class QwenIcelandicTrainer:
-    """Fine-tune Qwen3-4B for Icelandic using memory-efficient techniques"""
+    """Fine-tune Qwen 2.5 3B for Icelandic using memory-efficient techniques"""
     
     def __init__(
         self,
-        model_name: str = "Qwen/Qwen3-4B-Thinking-2507",
+        model_name: str = "Qwen/Qwen2.5-3B-Instruct",
         output_dir: str = "./qwen-icelandic-4b",
         max_seq_length: int = 2048,
         use_4bit: bool = True
@@ -46,7 +46,7 @@ class QwenIcelandicTrainer:
                 self.max_seq_length = min(1024, max_seq_length)
         
     def load_model_and_tokenizer(self):
-        """Load Qwen3-4B with QLoRA configuration optimized for RTX 3080"""
+        """Load Qwen 2.5 3B with QLoRA configuration optimized for RTX 3080"""
         print(f"Loading model: {self.model_name}")
         
         # Load model with 4-bit quantization for memory efficiency
@@ -297,8 +297,8 @@ def main():
     """Main training pipeline"""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Train Qwen3-4B on Icelandic data")
-    parser.add_argument("--model", type=str, default="Qwen/Qwen3-4B-Thinking-2507",
+    parser = argparse.ArgumentParser(description="Train Qwen 2.5 3B on Icelandic data")
+    parser.add_argument("--model", type=str, default="Qwen/Qwen2.5-3B-Instruct",
                         help="Model name or path")
     parser.add_argument("--dataset", type=str, default=None,
                         help="Path to prepared dataset")
