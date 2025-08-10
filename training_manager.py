@@ -16,7 +16,12 @@ import threading
 import queue
 import subprocess
 import psutil
-import GPUtil
+
+try:
+    import GPUtil
+    GPUTIL_AVAILABLE = True
+except ImportError:
+    GPUTIL_AVAILABLE = False
 
 from rich.console import Console
 from rich.layout import Layout

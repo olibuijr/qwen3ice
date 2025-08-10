@@ -22,11 +22,33 @@ if [ ! -d "venv" ]; then
     python3 -m venv venv
     source venv/bin/activate
     pip install --upgrade pip
-    pip install -r requirements_full.txt
+    
+    # Install essential requirements first
+    echo -e "${YELLOW}Installing essential dependencies...${NC}"
+    pip install -r requirements_essential.txt
+    
+    # Try to install full requirements (may fail on some systems)
+    echo -e "${YELLOW}Installing additional dependencies...${NC}"
+    pip install GPUtil nvidia-ml-py plotext textual || echo -e "${YELLOW}Some optional dependencies skipped${NC}"
+    
     echo -e "${GREEN}✓ Virtual environment created${NC}"
 else
     source venv/bin/activate
     echo -e "${GREEN}✓ Virtual environment activated${NC}"
+    
+    # Check for missing dependencies and install them
+    python -c "import GPUtil" 2>/dev/null || {
+        echo -e "${YELLOW}Installing missing GPUtil...${NC}"
+        pip install GPUtil || echo -e "${YELLOW}GPUtil not available (optional)${NC}"
+    }
+    python -c "import plotext" 2>/dev/null || {
+        echo -e "${YELLOW}Installing missing plotext...${NC}"
+        pip install plotext || echo -e "${YELLOW}plotext not available (optional)${NC}"
+    }
+    python -c "import textual" 2>/dev/null || {
+        echo -e "${YELLOW}Installing missing textual...${NC}"
+        pip install textual || echo -e "${YELLOW}textual not available (optional)${NC}"
+    }
 fi
 
 # Check for GPU
