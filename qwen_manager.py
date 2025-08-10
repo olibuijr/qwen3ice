@@ -44,9 +44,17 @@ from rich.text import Text
 # ML imports (optional, graceful fallback)
 try:
     import torch
-    import GPUtil
     CUDA_AVAILABLE = torch.cuda.is_available()
-    
+except ImportError:
+    CUDA_AVAILABLE = False
+
+try:
+    import GPUtil
+    GPU_AVAILABLE = True
+except ImportError:
+    GPU_AVAILABLE = False
+
+try:
     from datasets import load_dataset, Dataset, DatasetDict
     from transformers import (
         AutoModelForCausalLM, 
@@ -59,7 +67,11 @@ try:
     ML_AVAILABLE = True
 except ImportError:
     ML_AVAILABLE = False
-    CUDA_AVAILABLE = False
+    # Define dummy classes for type hints when imports fail
+    class DatasetDict:
+        pass
+    class Dataset:
+        pass
 
 # Try to import Unsloth for optimizations
 try:
@@ -130,7 +142,10 @@ class ProjectConfig:
         """Load config from YAML file"""
         with open(path, 'r') as f:
             data = yaml.safe_load(f)
-        return cls(**data)
+        # Filter out unknown fields
+        valid_fields = cls.__dataclass_fields__.keys()
+        filtered_data = {k: v for k, v in data.items() if k in valid_fields}
+        return cls(**filtered_data)
     
     def save(self, path: str):
         """Save config to YAML file"""
