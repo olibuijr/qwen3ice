@@ -1,0 +1,32 @@
+ICELANDIC DATASET SUMMARY
+=========================
+Date: 2025-08-10
+Total Examples: 10,654
+
+Training Set: 10,121 examples
+Validation Set: 533 examples
+
+Data Sources:
+1. Wikipedia Icelandic (wikimedia/wikipedia)
+   - 57,453 articles downloaded
+   - ~3,844 examples processed
+
+2. Icelandic Common Crawl (IC3)
+   - 1,751,421 documents available
+   - ~4,910 examples processed
+
+3. Icelandic Wiki QA
+   - 1,900 Q&A pairs
+   - 1,900 examples processed
+
+Format:
+- Conversational format with system/user/assistant roles
+- Icelandic language throughout
+- Mix of continuation tasks and Q&A
+
+File Sizes:
+- train.jsonl: 8.0MB
+- validation.jsonl: 425KB
+
+Ready for training with:
+python train_qwen_icelandic.py --dataset ./data/icelandic/train.jsonl

@@ -1,0 +1,92 @@
+# Qwen3-4B Icelandic Training Configuration
+# Optimized for RTX 3080 (10GB VRAM)
+
+model:
+  name: "Qwen/Qwen3-4B-Thinking-2507"
+  max_seq_length: 2048  # Reduce to 1024 if memory issues
+  load_in_4bit: true
+  dtype: "auto"  # Will use float16 on RTX 3080
+
+lora:
+  r: 32  # LoRA rank
+  alpha: 32  # LoRA alpha
+  dropout: 0.0  # No dropout for Unsloth optimization
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+  bias: "none"
+  use_rslora: false
+  use_gradient_checkpointing: "unsloth"  # 30% memory reduction
+
+training:
+  output_dir: "./qwen-icelandic-4b"
+  num_train_epochs: 3
+  
+  # Batch size settings for 10GB VRAM
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 8  # Effective batch size = 8
+  
+  # Learning rate schedule
+  learning_rate: 2.0e-4
+  lr_scheduler_type: "linear"
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  
+  # Optimizer
+  optim: "adamw_8bit"  # 8-bit Adam for memory efficiency
+  
+  # Mixed precision
+  fp16: true  # Use FP16 on RTX 3080
+  bf16: false  # RTX 3080 doesn't have optimal BF16 support
+  
+  # Memory optimizations
+  gradient_checkpointing: true
+  max_grad_norm: 0.3
+  
+  # Logging and checkpointing
+  logging_steps: 10
+  save_strategy: "steps"
+  save_steps: 100
+  evaluation_strategy: "steps"
+  eval_steps: 100
+  save_total_limit: 3
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+  
+  # Other settings
+  seed: 42
+  report_to: "none"  # Set to "wandb" or "tensorboard" if needed
+  packing: false  # Don't pack sequences
+
+dataset:
+  train_path: "./data/icelandic/train.jsonl"
+  validation_path: "./data/icelandic/validation.jsonl"
+  max_examples: 100000  # Adjust based on available data
+  
+  # Sampling ratios for different sources
+  igc_ratio: 0.35  # Icelandic Gigaword Corpus
+  wikipedia_ratio: 0.25  # Wikipedia
+  oscar_ratio: 0.15  # OSCAR web crawl
+  greynir_ratio: 0.15  # GreynirCorpus
+  ic3_ratio: 0.10  # Common Crawl
+
+inference:
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 20
+  max_new_tokens: 256
+  repetition_penalty: 1.1
+
+# Memory usage estimates for RTX 3080 (10GB)
+memory_budget:
+  model_4bit: "~2.5GB"  # 4-bit quantized model
+  activations: "~2-3GB"  # For seq_len=2048
+  optimizer: "~1-2GB"  # 8-bit AdamW
+  overhead: "~2GB"  # CUDA kernels, etc.
+  total: "~8-9GB"  # Leaves 1-2GB buffer

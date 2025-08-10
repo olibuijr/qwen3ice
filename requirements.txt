@@ -1,0 +1,25 @@
+# Core dependencies for Qwen3-4B Icelandic training
+torch>=2.1.0
+transformers>=4.51.0
+datasets>=2.14.0
+accelerate>=0.24.0
+peft>=0.7.0
+trl>=0.7.4
+bitsandbytes>=0.41.0
+
+# Unsloth for optimized training (install from git)
+# pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
+
+# Additional utilities
+tqdm>=4.65.0
+pandas>=2.0.0
+numpy>=1.24.0
+sentencepiece>=0.1.99
+protobuf>=3.20.0
+
+# Optional for monitoring
+tensorboard>=2.13.0
+wandb>=0.15.0
+
+# For GGUF conversion (optional)
+llama-cpp-python>=0.2.0
